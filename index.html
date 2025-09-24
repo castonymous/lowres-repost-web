@@ -26,7 +26,7 @@
 <body>
 <header>
   <h1>Low-Res Repost Effect</h1>
-  <span>Bikin efek “udah di-download upload berkali-kali” langsung di browser</span>
+  <span>Bikin efek “udah di-download upload berkali-kali” + Retro jadul langsung di browser</span>
 </header>
 
 <main>
@@ -43,6 +43,7 @@
       <label>Pixelation scale <span><input id="scale" type="range" min="10" max="80" value="45"> <b id="sval">45%</b></span></label>
       <label>Re-compress rounds <span><input id="rounds" type="range" min="1" max="6" value="4"> <b id="rval">4×</b></span></label>
       <label>JPEG quality <span><input id="q" type="range" min="5" max="60" value="28"> <b id="qval">28</b></span></label>
+      <label>Retro Effect <span><input id="retro" type="range" min="0" max="100" value="0"> <b id="retroVal">0%</b></span></label>
 
       <div class="row">
         <label><input id="doNoise" type="checkbox" checked> Noise</label>
@@ -84,10 +85,13 @@
   const scaleEl = document.getElementById('scale');
   const roundsEl = document.getElementById('rounds');
   const qEl = document.getElementById('q');
+  const retroEl = document.getElementById('retro');
+
   const ival = document.getElementById('ival');
   const sval = document.getElementById('sval');
   const rval = document.getElementById('rval');
   const qval = document.getElementById('qval');
+  const retroVal = document.getElementById('retroVal');
 
   const doNoise = document.getElementById('doNoise');
   const doVign = document.getElementById('doVign');
@@ -123,13 +127,19 @@
 
   function pixelate(scalePct){
     const w=cv.width,h=cv.height;
+    const src=document.createElement("canvas");
+    src.width=w; src.height=h;
+    src.getContext("2d").drawImage(cv,0,0);
+
     const s=Math.max(1,Math.round(w*scalePct/100));
     const t=Math.max(1,Math.round(h*scalePct/100));
+
     const off=document.createElement("canvas");
     off.width=s; off.height=t;
     const octx=off.getContext("2d");
     octx.imageSmoothingEnabled=false;
-    octx.drawImage(cv,0,0,s,t);
+    octx.drawImage(src,0,0,s,t);
+
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(off,0,0,s,t,0,0,w,h);
     ctx.imageSmoothingEnabled=true;
@@ -206,11 +216,33 @@
     }
   }
 
+  function retroEffect(strength=50){
+    if (strength <= 0) return;
+    const w=cv.width,h=cv.height;
+    const img=ctx.getImageData(0,0,w,h);
+    const d=img.data;
+    const factor = strength / 100;
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2];
+      let nr = (r*0.393 + g*0.769 + b*0.189);
+      let ng = (r*0.349 + g*0.686 + b*0.168);
+      let nb = (r*0.272 + g*0.534 + b*0.131);
+      d[i]   = clamp(r*(1-factor) + nr*factor);
+      d[i+1] = clamp(g*(1-factor) + ng*factor);
+      d[i+2] = clamp(b*(1-factor) + nb*factor);
+    }
+    ctx.putImageData(img,0,0);
+  }
+
   btnApply.addEventListener('click', async ()=>{
+    if (!baseBitmap) return;
+    drawBase(baseBitmap);
+
     const intensity=+intensityEl.value;
     const scalePct=+scaleEl.value;
     const rounds=+roundsEl.value;
     const quality=(+qEl.value)/100;
+    const retroStrength=+retroEl.value;
 
     pixelate(scalePct);
     if(doSharpen.checked) sharpenHalo(0.6+0.2*intensity);
@@ -218,6 +250,7 @@
     if(doCA.checked) chromaticAberration(intensity>=4?2:1);
     if(doNoise.checked) addNoise(0.012+0.01*intensity);
     if(doVign.checked) vignette(0.10+0.04*intensity);
+    retroEffect(retroStrength);
   });
 
   btnReset.addEventListener('click', ()=>{ if(baseBitmap) drawBase(baseBitmap); });
@@ -239,11 +272,12 @@
   });
   fileEl.addEventListener('change',()=>{ if(fileEl.files.length) handleFile(fileEl.files[0]); });
 
-  [intensityEl,scaleEl,roundsEl,qEl].forEach(el=>el.addEventListener('input',()=>{
+  [intensityEl,scaleEl,roundsEl,qEl,retroEl].forEach(el=>el.addEventListener('input',()=>{
     ival.textContent=intensityEl.value;
     sval.textContent=scaleEl.value+"%";
     rval.textContent=roundsEl.value+"×";
     qval.textContent=qEl.value;
+    retroVal.textContent=retroEl.value+"%";
   }));
 })();
 </script>
